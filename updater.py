@@ -8,44 +8,48 @@ URL = os.environ.get("SUPABASE_URL")
 KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 supabase = create_client(URL, KEY)
 
+def find_team_id(name):
+    """Searches your 'teams' table to find the ID for an NCAA name"""
+    if not name: return None
+    # Use 'ilike' for a fuzzy match (e.g., 'Duke' matches 'Duke Blue Devils')
+    res = supabase.table("teams").select("id").ilike("name", f"%{name}%").execute()
+    return res.data[0]['id'] if res.data else None
+
 def auto_update():
-    # 1. Fetch ESPN Tournament Data (Replace with current year/league)
-    # This URL targets the Men's NCAA Tournament scoreboard
-    api_url = "https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard"
-    
+    # 1. Get NCAA Schedule (The best source for dates)
+    api_url = "https://ncaa-api.henrygd.me/scoreboard/basketball-men/d1"
     try:
         data = requests.get(api_url).json()
-    except Exception as e:
-        print(f"Error fetching ESPN data: {e}")
+    except:
+        print("API Error")
         return
 
-    events = data.get('events', [])
-    print(f"Found {len(events)} events on ESPN.")
+    games = data.get('games', [])
+    print(f"Found {len(games)} games to check.")
 
-    for event in events:
-        competition = event.get('competitions', [{}])[0]
-        
-        # Get Team IDs (These are the ESPN IDs you already use)
-        home_id = competition.get('competitors', [{}])[0].get('id')
-        away_id = competition.get('competitors', [{}])[1].get('id')
-        
-        # Get the Date
-        raw_date = event.get('date', '') # Format: 2026-03-19T16:15Z
-        day_label = "Upcoming"
-        
-        if raw_date:
-            # Parse the ESPN timestamp
-            dt = datetime.strptime(raw_date, '%Y-%m-%dT%H:%MZ')
-            day_label = dt.strftime('%A') # "Thursday"
+    for game in games:
+        # Get names from NCAA
+        ncaa_home = game.get('home', {}).get('names', {}).get('short', '')
+        ncaa_away = game.get('away', {}).get('names', {}).get('short', '')
 
-        # Update Matchups in Supabase
-        # We look for a matchup where these two ESPN IDs are playing
-        print(f"Syncing: {day_label} game for IDs {home_id} vs {away_id}")
-        
-        supabase.table("matchups").update({
-            "day": day_label,
-            "game_date": raw_date[:10] # Just the YYYY-MM-DD part
-        }).or_(f"and(team_1_id.eq.{home_id},team_2_id.eq.{away_id}),and(team_1_id.eq.{away_id},team_2_id.eq.{home_id})").execute()
+        # Find the IDs in your Supabase 'teams' table
+        home_id = find_team_id(ncaa_home)
+        away_id = find_team_id(ncaa_away)
+
+        if home_id and away_id:
+            # Get the day of the week
+            raw_date = game.get('startDate', '')
+            day_label = datetime.strptime(raw_date, '%Y-%m-%d').strftime('%A') if raw_date else "TBD"
+
+            print(f"Match: {ncaa_home} vs {ncaa_away} -> Updating to {day_label}")
+            
+            # UPDATE: Find the matchup where these two IDs play each other
+            supabase.table("matchups").update({
+                "day": day_label,
+                "game_date": raw_date
+            }).eq("team_1_id", home_id).eq("team_2_id", away_id).execute()
+        else:
+            print(f"Skipping: Couldn't map {ncaa_home} or {ncaa_away}")
 
 if __name__ == "__main__":
     auto_update()
