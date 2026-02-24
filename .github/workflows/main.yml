@@ -1,15 +1,21 @@
 name: ScoreBot
 on:
   schedule:
-    - cron: '*/5 * * * *' # Runs every 5 minutes
-  workflow_dispatch: # Allows manual run
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
 jobs:
   run-bot:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
       - run: pip install supabase requests
-      - run: python updater.py
+      - name: Run Script
+        # THIS IS THE PART THAT MATTERS:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python updater.py
