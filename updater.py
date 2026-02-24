@@ -1,47 +1,51 @@
 import os
 import requests
 from supabase import create_client
+from datetime import datetime
 
-# 1. Connect using your Service Key
+# Setup
 URL = os.environ.get("SUPABASE_URL")
 KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 supabase = create_client(URL, KEY)
 
 def auto_update():
-    # 2. Real-time NCAA D1 Scoreboard
-    api_url = "https://ncaa-api.henrygd.me/scoreboard/basketball-men/d1"
+    # 1. Fetch ESPN Tournament Data (Replace with current year/league)
+    # This URL targets the Men's NCAA Tournament scoreboard
+    api_url = "https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard"
     
     try:
         data = requests.get(api_url).json()
-    except:
-        print("API is down or unreachable.")
+    except Exception as e:
+        print(f"Error fetching ESPN data: {e}")
         return
 
-    # 3. Process the games safely
-    games = data.get('games', [])
-    if not games:
-        print("No games found in the API response right now.")
-        return
-    
-    for game in games:
-        # We use .get() to avoid the 'status' KeyError
-        if game.get('status') == "Final":
-            home = game.get('home', {}).get('team', {}).get('name')
-            away = game.get('away', {}).get('team', {}).get('name')
-            
-            if not home or not away: continue
+    events = data.get('events', [])
+    print(f"Found {len(events)} events on ESPN.")
 
-            # Determine winner
-            h_score = int(game.get('home', {}).get('score', 0))
-            a_score = int(game.get('away', {}).get('score', 0))
-            winner_name = home if h_score > a_score else away
-            
-            # 4. Update Database
-            team = supabase.table("teams").select("id").eq("name", winner_name).execute()
-            if team.data:
-                win_id = team.data[0]['id']
-                supabase.table("matchups").update({"winner_id": win_id}).or_(f"team_1_id.eq.{win_id},team_2_id.eq.{win_id}").execute()
-                print(f"Updated {winner_name} as the winner!")
+    for event in events:
+        competition = event.get('competitions', [{}])[0]
+        
+        # Get Team IDs (These are the ESPN IDs you already use)
+        home_id = competition.get('competitors', [{}])[0].get('id')
+        away_id = competition.get('competitors', [{}])[1].get('id')
+        
+        # Get the Date
+        raw_date = event.get('date', '') # Format: 2026-03-19T16:15Z
+        day_label = "Upcoming"
+        
+        if raw_date:
+            # Parse the ESPN timestamp
+            dt = datetime.strptime(raw_date, '%Y-%m-%dT%H:%MZ')
+            day_label = dt.strftime('%A') # "Thursday"
+
+        # Update Matchups in Supabase
+        # We look for a matchup where these two ESPN IDs are playing
+        print(f"Syncing: {day_label} game for IDs {home_id} vs {away_id}")
+        
+        supabase.table("matchups").update({
+            "day": day_label,
+            "game_date": raw_date[:10] # Just the YYYY-MM-DD part
+        }).or_(f"and(team_1_id.eq.{home_id},team_2_id.eq.{away_id}),and(team_1_id.eq.{away_id},team_2_id.eq.{home_id})").execute()
 
 if __name__ == "__main__":
     auto_update()
