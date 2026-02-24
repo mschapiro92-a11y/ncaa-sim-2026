@@ -3,6 +3,8 @@ import requests
 from supabase import create_client
 from datetime import datetime
 
+print("--- RUNNING VERSION: FEB 24 REHEARSAL 1.0 ---")
+
 # Setup
 URL = os.environ.get("SUPABASE_URL")
 KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
