@@ -10,7 +10,8 @@ def auto_update():
     data = requests.get(api_url).json()
     
     for game in data.get('games', []):
-        if game['status'] == "Final":
+        # .get() prevents the crash if 'status' is missing
+        if game.get('status') == "Final":
             # Determine the winner
             home = game['home']['team']['name']
             away = game['away']['team']['name']
