@@ -12,7 +12,7 @@ supabase = create_client(URL, KEY)
 
 def auto_update():
     # Adding 'groups=50' to get ALL D1 games, not just Top 25
-    api_url = "https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard?groups=50&limit=500"
+    api_url = "https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard?groups=50&limit=500&dates=20260223-20260228"
     
     try:
         response = requests.get(api_url)
